@@ -6,3 +6,213 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum ImportFileType {
+  csv
+  xlsx
+}
+
+enum ImportStatus {
+  uploaded
+  processing
+  processed
+  failed
+}
+
+enum CallStatus {
+  initiated
+  ringing
+  connected
+  completed
+  failed
+}
+
+enum CampaignStatus {
+  created
+  running
+  completed
+  failed
+}
+
+model ContactImportFile {
+  id               String         @id @default(cuid())
+
+  originalFileName String
+  storedFileName   String?
+  fileType         ImportFileType
+  mimeType         String?
+  fileSize         Int?
+
+  s3Bucket         String?
+  s3Key            String?
+  s3Url            String?
+
+  totalSheets      Int            @default(0)
+  totalRows        Int            @default(0)
+
+  status           ImportStatus   @default(uploaded)
+  errorMessage     String?
+
+  sheets           ContactImportSheet[]
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([s3Key])
+}
+
+model ContactImportSheet {
+  id             String            @id @default(cuid())
+
+  importFileId   String
+  importFile     ContactImportFile @relation(fields: [importFileId], references: [id], onDelete: Cascade)
+
+  sheetName      String
+  totalRows      Int               @default(0)
+  validRows      Int               @default(0)
+  invalidRows    Int               @default(0)
+
+  rows           ContactImportRow[]
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([importFileId])
+}
+
+model ContactImportRow {
+  id              String             @id @default(cuid())
+
+  importSheetId   String
+  importSheet     ContactImportSheet @relation(fields: [importSheetId], references: [id], onDelete: Cascade)
+
+  rowNumber       Int
+
+  name            String?
+  phone           String?
+  email           String?
+  company         String?
+
+  rawData         Json
+
+  isValid         Boolean            @default(false)
+  validationError String?
+  isSelected      Boolean            @default(false)
+
+  contactId       String?
+  contact         Contact?           @relation(fields: [contactId], references: [id])
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([importSheetId])
+  @@index([isValid])
+  @@index([isSelected])
+  @@index([contactId])
+}
+
+model Contact {
+  id              String             @id @default(cuid())
+
+  name            String
+  phone           String
+  email           String?
+  company         String?
+
+  importRows      ContactImportRow[]
+  calls           Call[]
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([phone])
+  @@index([email])
+}
+
+model Script {
+  id               String     @id @default(cuid())
+
+  title            String
+  content          String
+  voicePreviewText String?
+
+  campaigns        Campaign[]
+  calls            Call[]
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model Campaign {
+  id             String         @id @default(cuid())
+
+  name           String
+  status         CampaignStatus @default(created)
+
+  scriptId        String
+  script          Script         @relation(fields: [scriptId], references: [id])
+
+  totalContacts  Int            @default(0)
+  completedCalls Int            @default(0)
+  failedCalls    Int            @default(0)
+
+  startedAt      DateTime?
+  endedAt        DateTime?
+
+  calls          Call[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([scriptId])
+  @@index([status])
+}
+
+model Call {
+  id              String     @id @default(cuid())
+
+  contactId       String
+  contact         Contact    @relation(fields: [contactId], references: [id])
+
+  scriptId        String
+  script          Script     @relation(fields: [scriptId], references: [id])
+
+  campaignId      String?
+  campaign        Campaign?  @relation(fields: [campaignId], references: [id])
+
+  queueOrder      Int?
+
+  status          CallStatus @default(initiated)
+
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+
+  events          CallEvent[]
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([contactId])
+  @@index([scriptId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([queueOrder])
+}
+
+model CallEvent {
+  id        String     @id @default(cuid())
+
+  callId    String
+  call      Call       @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  status    CallStatus
+  message   String?
+
+  createdAt DateTime   @default(now())
+
+  @@index([callId])
+  @@index([status])
+}

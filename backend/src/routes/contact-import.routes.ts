@@ -19,4 +19,9 @@ router.post(
 
 router.get("/contact-files", contactImportController.getContactImportFiles);
 
+router.get(
+  "/files/:importFileId/rows",
+  contactImportController.getRowsByImportFile
+);
+
 export default router;

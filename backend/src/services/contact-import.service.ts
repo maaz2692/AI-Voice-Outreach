@@ -24,6 +24,10 @@ type ParsedSheet = {
   }[];
 };
 
+type ImportedRowsFilter = {
+  isValid?: boolean;
+};
+
 function getFileType(originalFileName: string): SupportedImportFileType {
   const lowerFileName = originalFileName.toLowerCase();
 
@@ -274,4 +278,69 @@ export const contactImportService = {
 
     return importFiles;
   },
-};
+
+  async getRowsByImportFile(importFileId: string, filters: ImportedRowsFilter) {
+    if (!importFileId) {
+      throw new Error("importFileId is required");
+    }
+
+    const rowWhere: ImportedRowsFilter = {};
+
+    if (typeof filters.isValid === "boolean") {
+      rowWhere.isValid = filters.isValid;
+    }
+
+    const importFile = await prisma.contactImportFile.findUnique({
+      where: {
+        id: importFileId,
+      },
+      select: {
+        id: true,
+        originalFileName: true,
+        storedFileName: true,
+        fileType: true,
+        totalSheets: true,
+        totalRows: true,
+        status: true,
+        createdAt: true,
+        sheets: {
+          orderBy: {
+            createdAt: "asc",
+          },
+          select: {
+            id: true,
+            sheetName: true,
+            totalRows: true,
+            validRows: true,
+            invalidRows: true,
+            rows: {
+              where: rowWhere,
+              orderBy: {
+                rowNumber: "asc",
+              },
+              select: {
+                id: true,
+                rowNumber: true,
+                name: true,
+                phone: true,
+                email: true,
+                company: true,
+                rawData: true,
+                isValid: true,
+                validationError: true,
+                contactId: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!importFile) {
+      throw new Error("Import file not found");
+    }
+
+    return importFile;
+  },
+};  

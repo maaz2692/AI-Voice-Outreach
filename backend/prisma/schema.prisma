@@ -109,7 +109,6 @@ model ContactImportRow {
 
   @@index([importSheetId])
   @@index([isValid])
-  @@index([isSelected])
   @@index([contactId])
 }
 

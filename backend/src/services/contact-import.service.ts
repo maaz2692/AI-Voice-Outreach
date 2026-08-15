@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
-import { randomUUID } from "crypto";
 import { prisma } from "../utils/prisma.js";
+import { fileStorageService } from "./file-storage.service.js";
 
 type SupportedImportFileType = "csv" | "xlsx";
 
@@ -42,20 +42,14 @@ function getFileType(originalFileName: string): SupportedImportFileType {
   throw new Error("Only .csv and .xlsx files are supported right now");
 }
 
-function sanitizeFileName(fileName: string) {
-  return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-
-function createStoredFileName(originalFileName: string) {
-  const safeFileName = sanitizeFileName(originalFileName);
-  return `${Date.now()}-${randomUUID()}-${safeFileName}`;
-}
-
 function normalizeKey(key: string) {
   return key.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function getValueFromRow(row: Record<string, unknown>, possibleKeys: string[]) {
+function getValueFromRow(
+  row: Record<string, unknown>,
+  possibleKeys: string[]
+) {
   const normalizedPossibleKeys = possibleKeys.map(normalizeKey);
 
   for (const [key, value] of Object.entries(row)) {
@@ -63,18 +57,27 @@ function getValueFromRow(row: Record<string, unknown>, possibleKeys: string[]) {
 
     if (normalizedPossibleKeys.includes(normalizedRowKey)) {
       const cleanedValue = String(value ?? "").trim();
-      return cleanedValue.length > 0 ? cleanedValue : undefined;
+
+      return cleanedValue.length > 0
+        ? cleanedValue
+        : undefined;
     }
   }
 
   return undefined;
 }
 
-function toJsonSafeObject(row: Record<string, unknown>): JsonSafeObject {
+function toJsonSafeObject(
+  row: Record<string, unknown>
+): JsonSafeObject {
   const safeObject: JsonSafeObject = {};
 
   for (const [key, value] of Object.entries(row)) {
-    if (value === undefined || value === null || value === "") {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ""
+    ) {
       safeObject[key] = null;
     } else if (
       typeof value === "string" ||
@@ -90,7 +93,10 @@ function toJsonSafeObject(row: Record<string, unknown>): JsonSafeObject {
   return safeObject;
 }
 
-function validateImportedRow(name?: string, phone?: string) {
+function validateImportedRow(
+  name?: string,
+  phone?: string
+) {
   const errors: string[] = [];
 
   if (!name) {
@@ -103,7 +109,10 @@ function validateImportedRow(name?: string, phone?: string) {
 
   return {
     isValid: errors.length === 0,
-    validationError: errors.length > 0 ? errors.join(", ") : undefined,
+    validationError:
+      errors.length > 0
+        ? errors.join(", ")
+        : undefined,
   };
 }
 
@@ -117,11 +126,15 @@ function parseWorkbook(buffer: Buffer): ParsedSheet[] {
   for (const sheetName of workbook.SheetNames) {
     const worksheet = workbook.Sheets[sheetName];
 
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
-      defval: "",
-      raw: false,
-      blankrows: false,
-    });
+    const rows =
+      XLSX.utils.sheet_to_json<Record<string, unknown>>(
+        worksheet,
+        {
+          defval: "",
+          raw: false,
+          blankrows: false,
+        }
+      );
 
     const parsedRows = rows.map((row, index) => {
       const name = getValueFromRow(row, [
@@ -153,7 +166,10 @@ function parseWorkbook(buffer: Buffer): ParsedSheet[] {
         "organisation",
       ]);
 
-      const validation = validateImportedRow(name, phone);
+      const validation = validateImportedRow(
+        name,
+        phone
+      );
 
       return {
         rowNumber: index + 2,
@@ -163,12 +179,17 @@ function parseWorkbook(buffer: Buffer): ParsedSheet[] {
         company,
         rawData: toJsonSafeObject(row),
         isValid: validation.isValid,
-        validationError: validation.validationError,
+        validationError:
+          validation.validationError,
       };
     });
 
-    const validRows = parsedRows.filter((row) => row.isValid).length;
-    const invalidRows = parsedRows.length - validRows;
+    const validRows = parsedRows.filter(
+      (row) => row.isValid
+    ).length;
+
+    const invalidRows =
+      parsedRows.length - validRows;
 
     parsedSheets.push({
       sheetName,
@@ -183,82 +204,109 @@ function parseWorkbook(buffer: Buffer): ParsedSheet[] {
 }
 
 export const contactImportService = {
-  async importContactsFromFile(file: Express.Multer.File) {
+  async importContactsFromFile(file: Express.Multer.File ) {
     const fileType = getFileType(file.originalname);
-    const storedFileName = createStoredFileName(file.originalname);
 
     const parsedSheets = parseWorkbook(file.buffer);
 
     const totalSheets = parsedSheets.length;
-    const totalRows = parsedSheets.reduce((sum, sheet) => sum + sheet.totalRows, 0);
+
+    const totalRows = parsedSheets.reduce((sum, sheet) => sum + sheet.totalRows,0 );
 
     if (totalRows === 0) {
-      throw new Error("The uploaded file does not contain any contact rows");
+      throw new Error(
+        "The uploaded file does not contain any contact rows"
+      );
     }
 
-    const importFile = await prisma.$transaction(async (tx) => {
-      const createdImportFile = await tx.contactImportFile.create({
-        data: {
-          originalFileName: file.originalname,
-          storedFileName,
-          fileType,
-          mimeType: file.mimetype,
-          fileSize: file.size,
-          totalSheets,
-          totalRows,
-          status: "processed",
-        },
-      });
+    const uploadedFile = await fileStorageService.uploadImportFile(file);
 
-      for (const sheet of parsedSheets) {
-        const createdSheet = await tx.contactImportSheet.create({
-          data: {
-            importFileId: createdImportFile.id,
+    try {
+      const importFile =await prisma.$transaction( async (tx) => {
+            const createdImportFile = await tx.contactImportFile.create({
+                data: {
+                  originalFileName: file.originalname,
+                  storedFileName: uploadedFile.storedFileName,
+                  fileType,
+                  mimeType: file.mimetype,
+                  fileSize: file.size,
+                  s3Bucket: uploadedFile.bucketName,
+                  s3Key: uploadedFile.s3Key,
+                  totalSheets,
+                  totalRows,
+                  status: "processed",
+                },
+              });
+
+            for (const sheet of parsedSheets) {
+              const createdSheet = await tx.contactImportSheet.create({
+                  data: {
+                    importFileId: createdImportFile.id,
+                    sheetName: sheet.sheetName,
+                    totalRows: sheet.totalRows,
+                    validRows: sheet.validRows,
+                    invalidRows: sheet.invalidRows,
+                  },
+                });
+
+              if (sheet.rows.length > 0) {
+                await tx.contactImportRow.createMany({
+                  data: sheet.rows.map((row) => ({
+                      importSheetId: createdSheet.id,
+                      rowNumber: row.rowNumber,
+                      name: row.name,
+                      phone: row.phone,
+                      email: row.email,
+                      company: row.company,
+                      rawData: row.rawData,
+                      isValid: row.isValid,
+                      validationError: row.validationError,
+                    })
+                  ),
+                });
+              }
+            }
+            return createdImportFile;
+          }
+        );
+
+      return {
+        importFileId: importFile.id,
+        originalFileName: importFile.originalFileName,
+        storedFileName: importFile.storedFileName,
+        fileType: importFile.fileType,
+        s3Bucket: importFile.s3Bucket,
+        s3Key: importFile.s3Key,
+        totalSheets,
+        totalRows,
+
+        sheets: parsedSheets.map(
+          (sheet) => ({
             sheetName: sheet.sheetName,
             totalRows: sheet.totalRows,
             validRows: sheet.validRows,
             invalidRows: sheet.invalidRows,
-          },
-        });
-
-        if (sheet.rows.length > 0) {
-          await tx.contactImportRow.createMany({
-            data: sheet.rows.map((row) => ({
-              importSheetId: createdSheet.id,
-              rowNumber: row.rowNumber,
-              name: row.name,
-              phone: row.phone,
-              email: row.email,
-              company: row.company,
-              rawData: row.rawData,
-              isValid: row.isValid,
-              validationError: row.validationError,
-            })),
-          });
-        }
+          })
+        ),
+      };
+    } catch (error) {
+      try {
+        await fileStorageService.deleteImportFile(
+          uploadedFile.s3Key
+        );
+      } catch (cleanupError) {
+        console.error(
+          "Failed to delete S3 file after database error:",
+          cleanupError
+        );
       }
 
-      return createdImportFile;
-    });
-
-    return {
-      importFileId: importFile.id,
-      originalFileName: importFile.originalFileName,
-      storedFileName: importFile.storedFileName,
-      fileType: importFile.fileType,
-      totalSheets,
-      totalRows,
-      sheets: parsedSheets.map((sheet) => ({
-        sheetName: sheet.sheetName,
-        totalRows: sheet.totalRows,
-        validRows: sheet.validRows,
-        invalidRows: sheet.invalidRows,
-      })),
-    };
+      throw error;
+    }
   },
 
   async getContactImportFiles() {
-    const importFiles = await prisma.contactImportFile.findMany({
+    return prisma.contactImportFile.findMany({
       orderBy: {
         createdAt: "desc",
       },
@@ -275,13 +323,16 @@ export const contactImportService = {
         },
       },
     });
-
-    return importFiles;
   },
 
-  async getRowsByImportFile(importFileId: string, filters: ImportedRowsFilter) {
+  async getRowsByImportFile(
+    importFileId: string,
+    filters: ImportedRowsFilter
+  ) {
     if (!importFileId) {
-      throw new Error("importFileId is required");
+      throw new Error(
+        "importFileId is required"
+      );
     }
 
     const rowWhere: ImportedRowsFilter = {};
@@ -291,56 +342,61 @@ export const contactImportService = {
     }
 
     const importFile = await prisma.contactImportFile.findUnique({
-      where: {
-        id: importFileId,
-      },
-      select: {
-        id: true,
-        originalFileName: true,
-        storedFileName: true,
-        fileType: true,
-        totalSheets: true,
-        totalRows: true,
-        status: true,
-        createdAt: true,
-        sheets: {
-          orderBy: {
-            createdAt: "asc",
-          },
-          select: {
-            id: true,
-            sheetName: true,
-            totalRows: true,
-            validRows: true,
-            invalidRows: true,
-            rows: {
-              where: rowWhere,
-              orderBy: {
-                rowNumber: "asc",
-              },
-              select: {
-                id: true,
-                rowNumber: true,
-                name: true,
-                phone: true,
-                email: true,
-                company: true,
-                rawData: true,
-                isValid: true,
-                validationError: true,
-                contactId: true,
-                createdAt: true,
+        where: {
+          id: importFileId,
+        },
+        select: {
+          id: true,
+          originalFileName: true,
+          storedFileName: true,
+          fileType: true,
+          s3Bucket: true,
+          s3Key: true,
+          totalSheets: true,
+          totalRows: true,
+          status: true,
+          createdAt: true,
+          sheets: {
+            orderBy: {
+              createdAt: "asc",
+            },
+
+            select: {
+              id: true,
+              sheetName: true,
+              totalRows: true,
+              validRows: true,
+              invalidRows: true,
+              rows: {
+                where: rowWhere,
+                orderBy: {
+                  rowNumber: "asc",
+                },
+                select: {
+                  id: true,
+                  rowNumber: true,
+                  name: true,
+                  phone: true,
+                  email: true,
+                  company: true,
+                  rawData: true,
+                  isValid: true,
+                  validationError: true,
+                  contactId: true,
+                  createdAt: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
     if (!importFile) {
-      throw new Error("Import file not found");
+      throw new Error(
+        "Import file not found"
+      );
     }
 
     return importFile;
   },
-};  
+};

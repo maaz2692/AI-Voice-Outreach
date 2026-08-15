@@ -17,7 +17,10 @@ router.post(
   contactImportController.uploadContactFile
 );
 
-router.get("/contact-files", contactImportController.getContactImportFiles);
+router.get(
+  "/contact-files",
+  contactImportController.getContactImportFiles
+);
 
 router.get(
   "/files/:importFileId/rows",

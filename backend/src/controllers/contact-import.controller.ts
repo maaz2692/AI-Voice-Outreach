@@ -25,16 +25,30 @@ function parseOptionalBoolean(value: unknown) {
   return undefined;
 }
 
+function getSingleParam(value: unknown) {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return undefined;
+}
+
 export const contactImportController = {
   async uploadContactFile(req: Request, res: Response) {
     try {
       if (!req.file) {
         return res.status(400).json({
-          message: "Please upload a CSV or XLSX file using the field name 'file'",
+          message:
+            "Please upload a CSV or XLSX file using the field name 'file'",
         });
       }
 
-      const result = await contactImportService.importContactsFromFile(req.file);
+      const result =
+        await contactImportService.importContactsFromFile(req.file);
 
       return res.status(201).json({
         message: "Contact file imported successfully",
@@ -49,7 +63,8 @@ export const contactImportController = {
 
   async getContactImportFiles(req: Request, res: Response) {
     try {
-      const importFiles = await contactImportService.getContactImportFiles();
+      const importFiles =
+        await contactImportService.getContactImportFiles();
 
       return res.status(200).json({
         message: "Contact import files fetched successfully",
@@ -63,31 +78,35 @@ export const contactImportController = {
   },
 
   async getRowsByImportFile(req: Request, res: Response) {
-  try {
-    const importFileIdParam = req.params.importFileId;
+    try {
+      const importFileId = getSingleParam(
+        req.params.importFileId
+      );
 
-    const importFileId = Array.isArray(importFileIdParam)
-      ? importFileIdParam[0]
-      : importFileIdParam;
+      if (!importFileId) {
+        return res.status(400).json({
+          message: "importFileId is required",
+        });
+      }
 
-    if (!importFileId) {
+      const result =
+        await contactImportService.getRowsByImportFile(
+          importFileId,
+          {
+            isValid: parseOptionalBoolean(
+              req.query.isValid
+            ),
+          }
+        );
+
+      return res.status(200).json({
+        message: "Imported rows fetched successfully",
+        data: result,
+      });
+    } catch (error) {
       return res.status(400).json({
-        message: "importFileId is required",
+        message: getErrorMessage(error),
       });
     }
-
-    const result = await contactImportService.getRowsByImportFile(importFileId, {
-      isValid: parseOptionalBoolean(req.query.isValid),
-    });
-
-    return res.status(200).json({
-      message: "Imported rows fetched successfully",
-      data: result,
-    });
-  } catch (error) {
-    return res.status(400).json({
-      message: getErrorMessage(error),
-    });
-  }
-}
+  },
 };

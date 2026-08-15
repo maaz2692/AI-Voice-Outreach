@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "aws:test-s3": "tsx src/scripts/test-s3-connection.ts"
+    "aws:test-s3": "tsx src/scripts/test-s3-connection.ts",
+    "aws:test-upload": "tsx src/scripts/test-s3-upload.ts"
   },
   "keywords": [
     "express",

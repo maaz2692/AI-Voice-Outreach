@@ -1,6 +1,6 @@
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
-import ImportFilesPanel from "@/components/imports/ImportFilesPanel";
+import OutreachWorkspace from "@/components/outreach/OutreachWorkspace";
 
 export default function Home() {
   return (
@@ -12,7 +12,7 @@ export default function Home() {
 
         <main className="p-8">
           <div className="mx-auto max-w-7xl">
-            <ImportFilesPanel />
+            <OutreachWorkspace />
           </div>
         </main>
       </div>

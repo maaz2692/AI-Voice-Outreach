@@ -1,0 +1,118 @@
+@use "../../styles/variables" as vars;
+
+.sidebar {
+  width: vars.$sidebar-width;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  padding: 24px 18px;
+
+  display: flex;
+  flex-direction: column;
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.logo {
+  width: 40px;
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background: #2563eb;
+  color: white;
+
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.brandName {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.brandSubtitle {
+  margin-top: 2px;
+
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 11px 12px;
+
+  border-radius: 10px;
+
+  color: #6b7280;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+}
+
+.active {
+  background: #eff6ff;
+  color: #2563eb;
+
+  .menuDot {
+    background: #2563eb;
+  }
+}
+
+.menuDot {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 999px;
+
+  background: #d1d5db;
+}
+
+.footer {
+  margin-top: auto;
+
+  padding: 16px 12px;
+
+  border-top: 1px solid #f3f4f6;
+
+  p {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  span {
+    display: block;
+    margin-top: 3px;
+
+    font-size: 11px;
+    color: #9ca3af;
+  }
+}
